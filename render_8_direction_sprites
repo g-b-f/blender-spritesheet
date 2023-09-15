@@ -14,9 +14,12 @@ from bpy.types import (Panel,
                        PropertyGroup,
                        UIList
                        )
+from bpy_extras.io_utils import ImportHelper
+from bpy.types import Operator
                        
 class TestPropGroup(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(name="name", default="Text")
+    dirname: bpy.props.StringProperty(name="Output", default="/tmp/")
     value: bpy.props.IntProperty(name="value", default=5)
     res_x: bpy.props.IntProperty(name="Resolution X", default=256)
     res_y: bpy.props.IntProperty(name="Resolution Y", default=256)
@@ -32,6 +35,39 @@ class TestPropGroup(bpy.types.PropertyGroup):
     
 bpy.utils.register_class(TestPropGroup)
 
+class OT_TestOpenFilebrowser(Operator, ImportHelper):
+
+    bl_idname = "filebrowser.render_path"
+    bl_label = "Select render folder"
+     
+    filter_glob: StringProperty(
+        default='*',
+        options={'HIDDEN'}
+    )
+    
+    some_boolean: BoolProperty(
+        name='Do a thing',
+        description='Do a thing with the file you\'ve selected'
+    )
+
+    def execute(self, context):
+        """Do something with the selected file(s)."""
+
+        filebase, extension = os.path.splitext(self.filepath)
+        
+        dirname, basename = os.path.split(self.filepath)
+        
+        print('Selected file:', self.filepath)
+        print('filebase:', filebase)
+        print('dirname:', dirname)
+        print('basename:', basename)
+        print('File extension:', extension)
+        print('Some Boolean:', self.some_boolean)
+        
+        context.scene.test_prop.dirname = dirname
+        
+        return {'FINISHED'}
+
 class ListItem(PropertyGroup): 
     """Group of properties representing an item in the list.""" 
     name: StringProperty( 
@@ -39,6 +75,11 @@ class ListItem(PropertyGroup):
         description="A name for this item", 
         default="Untitled") 
 
+    active: BoolProperty( 
+        name="Active", 
+        description="A name for this item", 
+        default=True)
+        
     random_prop: StringProperty( 
         name="Any other property you want", 
         description="", default="")
@@ -52,7 +93,10 @@ class MY_UL_List(UIList):
                   active_propname, index):
 
         # We could write some code to decide which icon to use here...
-        custom_icon = 'OBJECT_DATAMODE'
+        if item.active == True:
+            custom_icon = 'CHECKBOX_HLT'
+        else:
+            custom_icon = 'CHECKBOX_DEHLT'
 
         # Make sure your code supports all 3 layout types
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
@@ -62,6 +106,7 @@ class MY_UL_List(UIList):
             layout.alignment = 'CENTER'
             layout.label(text="", icon = custom_icon)
 
+        layout.enabled = item.active
 
 bpy.utils.register_class(MY_UL_List)
 
@@ -72,8 +117,7 @@ class LIST_OT_NewItem(Operator):
     bl_label = "Add a new item"
 
     def execute(self, context):
-        #context.scene.my_list.clear()
-        context.scene.my_list.add()
+        list = context.scene.my_list.add()
 
         return{'FINISHED'}
 
@@ -97,8 +141,48 @@ class LIST_OT_DeleteItem(Operator):
         context.scene.list_index = min(max(0, index - 1), len(my_list) - 1)
 
         return{'FINISHED'}
-    
+
 bpy.utils.register_class(LIST_OT_DeleteItem)
+
+class LIST_OT_ActivateItem(Operator):
+    """Activate the selected item from the list."""
+
+    bl_idname = "my_list.activate_item"
+    bl_label = "Activate an item"
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.my_list
+
+    def execute(self, context):
+        my_list = context.scene.my_list
+        index = context.scene.list_index
+        
+        context.scene.my_list[index].active = True
+
+        return{'FINISHED'}
+    
+bpy.utils.register_class(LIST_OT_ActivateItem)
+ 
+class LIST_OT_DeactivateItem(Operator):
+    """Deactivate the selected item from the list."""
+
+    bl_idname = "my_list.deactivate_item"
+    bl_label = "Deactivate an item"
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.my_list
+
+    def execute(self, context):
+        my_list = context.scene.my_list
+        index = context.scene.list_index
+        
+        context.scene.my_list[index].active = False
+
+        return{'FINISHED'}
+    
+bpy.utils.register_class(LIST_OT_DeactivateItem)
 
 class LIST_OT_ClearList(Operator):
     """Clear all items of the list"""
@@ -129,20 +213,15 @@ class TEST_PT_panel_p(bpy.types.Panel):
     bl_idname = 'TEST_PT_panel_p'
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
-    bl_context = "render"
+    bl_context = "output"
     bl_label = 'Direction Renderer'
  
-
-    
-         
     def draw(self, context):
         scene = context.scene
         object = context.object
         
-        
         self.layout.label(text="Settings to export rendered images:")
-        
-
+ 
         row = self.layout.row()
         row.prop(context.scene.test_prop, "res_x")
         row.prop(context.scene.test_prop, "res_y")
@@ -161,34 +240,36 @@ class TEST_PT_panel_p(bpy.types.Panel):
         row.prop(context.scene.test_prop, "direction_S")
         row.prop(context.scene.test_prop, "direction_SE")
         
-
-
+        split = self.layout.split(factor=0.92)
         
-        row = self.layout.row()
-        row.template_list("MY_UL_List", "The_List", scene,
+        col = split.column()
+        col.template_list("MY_UL_List", "The_List", scene,
                           "my_list", scene, "list_index")
 
+        col = split.column()
+        col.operator('my_list.activate_item', text='', icon='CHECKBOX_HLT')
+        col.operator('my_list.deactivate_item', text='', icon='CHECKBOX_DEHLT')
 
         row = self.layout.row()
-        row.operator('my_list.new_item', text='NEW')
-        row.operator('my_list.delete_item', text='REMOVE')
-        row.operator('my_list.clear_list', text='CLEAR')
-         
-#        if scene.list_index >= 0 and scene.my_list:
-#            item = scene.my_list[scene.list_index]
 
-#            row = self.layout.row()
-#            row.prop(item, "name")
-#            row.prop(item, "random_prop")
-            
+        split = self.layout.split(factor=0.92)
 
+        col = split.column()
+        col.prop(context.scene.test_prop, "dirname")
         
-        # sample operator call
+        col = split.column()
+        col.operator(
+            operator='filebrowser.render_path',
+            icon='FILEBROWSER',
+            text=''
+        )
+         
+        # render operator call
         self.layout.operator(
             operator='object.render_operator',
-            icon='BLENDER',
+            icon='RENDER_RESULT',
             text='Create direction images'
-        )        
+        )
 
         
     def register():
@@ -200,28 +281,31 @@ class TEST_PT_panel_p(bpy.types.Panel):
         #bpy.types.Scene.float_x = bpy.props.FloatProperty(default=4.5)
         #bpy.types.Scene.cube_x = bpy.props.IntProperty()
         
-
-            
     def unregister():
         del bpy.types.Scene.test_prop
 
 
 class RenderOperator(bpy.types.Operator):
     bl_idname = "object.render_operator"
-    bl_label = "Tool Name"
+    bl_label = "Render Operator"
 
     def execute(self, context):
         print("Hello Render")
         
-        index = context.scene.list_index
-        name = context.scene.my_list[index].name
-        print(name)
+        #index = context.scene.list_index
+        #name = context.scene.my_list[index].name
+        #print(name)
+        
+        #for item in context.scene.my_list:
+        #    print("name:" + item.name)
         
         #return {'FINISHED'}
 
-        path = '/home/andreas/tmp/mutant'
+        path = context.scene.test_prop.dirname
         # path fixing
         path = os.path.abspath(path)
+        
+        print("renderpath: " + path)
 
         # get list of selected objects
         selected_list = bpy.context.selected_objects
@@ -248,94 +332,93 @@ class RenderOperator(bpy.types.Operator):
             bpy.context.scene.objects[o.name].select_set(True)
 
             scn = bpy.context.scene
-            
+
             # loop through the actions
-            for a in bpy.data.actions:
+            for item in context.scene.my_list:
+                # render only in the UIList activated actions
+                if item.active == False:
+                    continue
+                
                 #assign the action
-                bpy.context.active_object.animation_data.action = bpy.data.actions.get(a.name)
+                bpy.context.active_object.animation_data.action = bpy.data.actions.get(item.name)
                 
                 #dynamically set the last frame to render based on action
                 scn.frame_end = int(bpy.context.active_object.animation_data.action.frame_range[1])
                 
                 #set which actions you want to render.  Make sure to use the exact name of the action!
-                if (
-                    a.name == name
-#                     a.name == "idle"
-#                     a.name == "run"
-#                     or a.name == "dying"
-                    ):
-                    
-                    #create folder for animation
-                    action_folder = os.path.join(path, a.name)
-                    if not os.path.exists(action_folder):
-                        os.makedirs(action_folder)
-                    
-                    #loop through all 8 directions
-                    for angle in range(0, 360, 45):
-                        if angle == 0:
-                            angleDir = "E"
-                        if angle == 45:
-                            angleDir = "NE"
-                        if angle == 90:
-                            angleDir = "N"
-                        if angle == 135:
-                            angleDir = "NW"
-                        if angle == 180:
-                            angleDir = "W"
-                        if angle == 225:
-                            angleDir = "SW"
-                        if angle == 270:
-                            angleDir = "S"
-                        if angle == 315:
-                            angleDir = "SE"
-                            
-                        #set which angles we want to render.
-                        if (   (angle == 0 and context.scene.test_prop.direction_E == True)
-                            or (angle == 45 and context.scene.test_prop.direction_NE == True)
-                            or (angle == 90 and context.scene.test_prop.direction_N == True)
-                            or (angle == 135 and context.scene.test_prop.direction_NW == True)
-                            or (angle == 180 and context.scene.test_prop.direction_W == True)
-                            or (angle == 225 and context.scene.test_prop.direction_SW == True)
-                            or (angle == 270 and context.scene.test_prop.direction_S == True)
-                            or (angle == 315 and context.scene.test_prop.direction_SE == True)
-                            ):
-                            
-                            #create folder for specific angle
-                            animation_folder = os.path.join(action_folder, angleDir)
-                            if not os.path.exists(animation_folder):
-                                os.makedirs(animation_folder)
-                            
-                            #rotate the model for the new angle
-                            bpy.context.active_object.rotation_euler[2] = math.radians(angle)
-                            
-                            # the below is for the use case where the root needed to be translated.
-    #                        obRoot.rotation_euler[2] = math.radians(angle)
-                            
-                            
-                            #loop through and render frames.  Can set how "often" it renders.
-                            #Every frame is likely not needed.  Currently set to 2 (every other).
-                            
-                            # TBD: some frame numbering logic needed!
-                            
-                            for i in range(s.frame_start,s.frame_end, context.scene.test_prop.frames):
-                                s.frame_current = i
+                #if (a.name == name):
+                
+                #create folder for animation
+                action_folder = os.path.join(path, item.name)
+                if not os.path.exists(action_folder):
+                    os.makedirs(action_folder)
+                
+                #loop through all 8 directions
+                for angle in range(0, 360, 45):
+                    if angle == 0:
+                        angleDir = "E"
+                    if angle == 45:
+                        angleDir = "NE"
+                    if angle == 90:
+                        angleDir = "N"
+                    if angle == 135:
+                        angleDir = "NW"
+                    if angle == 180:
+                        angleDir = "W"
+                    if angle == 225:
+                        angleDir = "SW"
+                    if angle == 270:
+                        angleDir = "S"
+                    if angle == 315:
+                        angleDir = "SE"
+                        
+                    #set which angles we want to render.
+                    if (   (angle == 0 and context.scene.test_prop.direction_E == True)
+                        or (angle == 45 and context.scene.test_prop.direction_NE == True)
+                        or (angle == 90 and context.scene.test_prop.direction_N == True)
+                        or (angle == 135 and context.scene.test_prop.direction_NW == True)
+                        or (angle == 180 and context.scene.test_prop.direction_W == True)
+                        or (angle == 225 and context.scene.test_prop.direction_SW == True)
+                        or (angle == 270 and context.scene.test_prop.direction_S == True)
+                        or (angle == 315 and context.scene.test_prop.direction_SE == True)
+                        ):
+                        
+                        #create folder for specific angle
+                        animation_folder = os.path.join(action_folder, angleDir)
+                        if not os.path.exists(animation_folder):
+                            os.makedirs(animation_folder)
+                        
+                        #rotate the model for the new angle
+                        bpy.context.active_object.rotation_euler[2] = math.radians(angle)
+                        
+                        # the below is for the use case where the root needed to be translated.
+#                        obRoot.rotation_euler[2] = math.radians(angle)
+                        
+                        
+                        #loop through and render frames.  Can set how "often" it renders.
+                        #Every frame is likely not needed.  Currently set to 2 (every other).
+                        
+                        # TBD: some frame numbering logic needed!
+                        
+                        for i in range(s.frame_start,s.frame_end, context.scene.test_prop.frames):
+                            s.frame_current = i
 
-                                s.render.filepath = (
-                                                    animation_folder
-                                                    + "\\"
-                                                    + str(a.name)
-                                                    + "_"
-                                                    + str(angle)
-                                                    + "_"
-                                                    + str(s.frame_current).zfill(3)
-                                                    )
-                                                    
-                                bpy.ops.render.render( #{'dict': "override"},
-                                                      #'INVOKE_DEFAULT',  
-                                                      False,            # undo support
-                                                      animation=False, 
-                                                      write_still=True
-                                                     )
+                            s.render.filepath = (
+                                                animation_folder
+                                                + "\\"
+                                                + str(item.name)
+                                                + "_"
+                                                + str(angle)
+                                                + "_"
+                                                + str(s.frame_current).zfill(3)
+                                                )
+                                                
+                            bpy.ops.render.render( #{'dict': "override"},
+                                                  #'INVOKE_DEFAULT',  
+                                                  False,            # undo support
+                                                  animation=False, 
+                                                  write_still=True
+                                                 )
                                                      
         return {'FINISHED'}
 
@@ -349,4 +432,14 @@ for a in bpy.data.actions:
     item = bpy.context.scene.my_list.add()
     item.name = a.name
         
-#render8directions_selected_objects('/home/andreas/tmp/mutant')
+def register():
+    bpy.utils.register_class(OT_TestOpenFilebrowser)
+
+
+def unregister():
+    bpy.utils.unregister_class(OT_TestOpenFilebrowser)
+
+
+if __name__ == "__main__":
+    register()
+
