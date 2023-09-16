@@ -17,7 +17,7 @@ from bpy.types import (Panel,
 from bpy_extras.io_utils import ImportHelper
 from bpy.types import Operator
                        
-class TestPropGroup(bpy.types.PropertyGroup):
+class RenderPropGroup(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(name="name", default="Text")
     dirname: bpy.props.StringProperty(name="Output", default="/tmp/")
     value: bpy.props.IntProperty(name="value", default=5)
@@ -33,9 +33,9 @@ class TestPropGroup(bpy.types.PropertyGroup):
     direction_S: bpy.props.BoolProperty(name="S", default=True)
     direction_SE: bpy.props.BoolProperty(name="SE", default=True)
     
-bpy.utils.register_class(TestPropGroup)
+bpy.utils.register_class(RenderPropGroup)
 
-class OT_TestOpenFilebrowser(Operator, ImportHelper):
+class OT_OpenFilebrowser(Operator, ImportHelper):
 
     bl_idname = "filebrowser.render_path"
     bl_label = "Select render folder"
@@ -64,7 +64,7 @@ class OT_TestOpenFilebrowser(Operator, ImportHelper):
         print('File extension:', extension)
         print('Some Boolean:', self.some_boolean)
         
-        context.scene.test_prop.dirname = dirname
+        context.scene.render_prop.dirname = dirname
         
         return {'FINISHED'}
 
@@ -78,7 +78,7 @@ class ListItem(PropertyGroup):
     active: BoolProperty( 
         name="Active", 
         description="A name for this item", 
-        default=True)
+        default=False)
         
     random_prop: StringProperty( 
         name="Any other property you want", 
@@ -209,8 +209,8 @@ class LIST_OT_ClearList(Operator):
 bpy.utils.register_class(LIST_OT_ClearList)
 
 
-class TEST_PT_panel_p(bpy.types.Panel):
-    bl_idname = 'TEST_PT_panel_p'
+class RENDER_PT_panel_p(bpy.types.Panel):
+    bl_idname = 'RENDER_PT_panel_p'
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "output"
@@ -223,22 +223,24 @@ class TEST_PT_panel_p(bpy.types.Panel):
         self.layout.label(text="Settings to export rendered images:")
  
         row = self.layout.row()
-        row.prop(context.scene.test_prop, "res_x")
-        row.prop(context.scene.test_prop, "res_y")
+        row.prop(context.scene.render_prop, "res_x")
+        row.prop(context.scene.render_prop, "res_y")
         row = self.layout.row()
-        row.prop(context.scene.test_prop, "frames")
+        row.prop(context.scene.render_prop, "frames")
         
         self.layout.label(text="Directions:")
         row = self.layout.row()
-        row.prop(context.scene.test_prop, "direction_E")
-        row.prop(context.scene.test_prop, "direction_NE")
-        row.prop(context.scene.test_prop, "direction_N")
-        row.prop(context.scene.test_prop, "direction_NW")
+        row.prop(context.scene.render_prop, "direction_E")
+        row.prop(context.scene.render_prop, "direction_NE")
+        row.prop(context.scene.render_prop, "direction_N")
+        row.prop(context.scene.render_prop, "direction_NW")
         row = self.layout.row()
-        row.prop(context.scene.test_prop, "direction_W")
-        row.prop(context.scene.test_prop, "direction_SW")
-        row.prop(context.scene.test_prop, "direction_S")
-        row.prop(context.scene.test_prop, "direction_SE")
+        row.prop(context.scene.render_prop, "direction_W")
+        row.prop(context.scene.render_prop, "direction_SW")
+        row.prop(context.scene.render_prop, "direction_S")
+        row.prop(context.scene.render_prop, "direction_SE")
+        
+        #row.prop_search(bpy.context.scene, "*",  bpy.data, "armatures")
         
         split = self.layout.split(factor=0.92)
         
@@ -255,7 +257,7 @@ class TEST_PT_panel_p(bpy.types.Panel):
         split = self.layout.split(factor=0.92)
 
         col = split.column()
-        col.prop(context.scene.test_prop, "dirname")
+        col.prop(context.scene.render_prop, "dirname")
         
         col = split.column()
         col.operator(
@@ -273,7 +275,7 @@ class TEST_PT_panel_p(bpy.types.Panel):
 
         
     def register():
-        bpy.types.Scene.test_prop = bpy.props.PointerProperty(type=TestPropGroup)
+        bpy.types.Scene.render_prop = bpy.props.PointerProperty(type=RenderPropGroup)
         bpy.types.Scene.my_list = CollectionProperty(type = ListItem)
         
         bpy.types.Scene.list_index = IntProperty(name = "Index for my_list", default = 0)
@@ -282,7 +284,7 @@ class TEST_PT_panel_p(bpy.types.Panel):
         #bpy.types.Scene.cube_x = bpy.props.IntProperty()
         
     def unregister():
-        del bpy.types.Scene.test_prop
+        del bpy.types.Scene.render_prop
 
 
 class RenderOperator(bpy.types.Operator):
@@ -299,9 +301,10 @@ class RenderOperator(bpy.types.Operator):
         #for item in context.scene.my_list:
         #    print("name:" + item.name)
         
+        # only to debug the render operation
         #return {'FINISHED'}
 
-        path = context.scene.test_prop.dirname
+        path = context.scene.render_prop.dirname
         # path fixing
         path = os.path.abspath(path)
         
@@ -315,8 +318,8 @@ class RenderOperator(bpy.types.Operator):
 
         s = bpy.context.scene
 
-        s.render.resolution_x = context.scene.test_prop.res_x
-        s.render.resolution_y = context.scene.test_prop.res_y
+        s.render.resolution_x = context.scene.render_prop.res_x
+        s.render.resolution_y = context.scene.render_prop.res_y
 
         
         # I left this in as in some of my models, I needed to translate the "root" object but
@@ -324,10 +327,18 @@ class RenderOperator(bpy.types.Operator):
         # 
         # obRoot = bpy.context.scene.objects["root"]
 
-
-        # loop all initial selected objects (which will likely just be one object.. I haven't tried setting up multiple yet)
+        only_armatures = True
         for o in selected_list:
-            
+            if o.type != 'ARMATURE':
+                only_armatures = False
+        
+        if only_armatures == False:
+            self.report({'WARNING'}, "Please select only Armatures. (Current: %s)" % o.type)
+            return {'FINISHED'}
+        
+        # loop all initial selected objects (which will likely just be one object.. I haven't tried setting up multiple yet)        
+        for o in selected_list:
+                        
             # select the object
             bpy.context.scene.objects[o.name].select_set(True)
 
@@ -373,14 +384,14 @@ class RenderOperator(bpy.types.Operator):
                         angleDir = "SE"
                         
                     #set which angles we want to render.
-                    if (   (angle == 0 and context.scene.test_prop.direction_E == True)
-                        or (angle == 45 and context.scene.test_prop.direction_NE == True)
-                        or (angle == 90 and context.scene.test_prop.direction_N == True)
-                        or (angle == 135 and context.scene.test_prop.direction_NW == True)
-                        or (angle == 180 and context.scene.test_prop.direction_W == True)
-                        or (angle == 225 and context.scene.test_prop.direction_SW == True)
-                        or (angle == 270 and context.scene.test_prop.direction_S == True)
-                        or (angle == 315 and context.scene.test_prop.direction_SE == True)
+                    if (   (angle == 0 and context.scene.render_prop.direction_E == True)
+                        or (angle == 45 and context.scene.render_prop.direction_NE == True)
+                        or (angle == 90 and context.scene.render_prop.direction_N == True)
+                        or (angle == 135 and context.scene.render_prop.direction_NW == True)
+                        or (angle == 180 and context.scene.render_prop.direction_W == True)
+                        or (angle == 225 and context.scene.render_prop.direction_SW == True)
+                        or (angle == 270 and context.scene.render_prop.direction_S == True)
+                        or (angle == 315 and context.scene.render_prop.direction_SE == True)
                         ):
                         
                         #create folder for specific angle
@@ -392,15 +403,11 @@ class RenderOperator(bpy.types.Operator):
                         bpy.context.active_object.rotation_euler[2] = math.radians(angle)
                         
                         # the below is for the use case where the root needed to be translated.
-#                        obRoot.rotation_euler[2] = math.radians(angle)
+                        # obRoot.rotation_euler[2] = math.radians(angle)
                         
-                        
-                        #loop through and render frames.  Can set how "often" it renders.
-                        #Every frame is likely not needed.  Currently set to 2 (every other).
-                        
-                        # TBD: some frame numbering logic needed!
-                        
-                        for i in range(s.frame_start,s.frame_end, context.scene.test_prop.frames):
+                        # loop through and render frames.  The UI sets how "often" it renders.
+                        # Every frame is likely not needed.                          
+                        for i in range(s.frame_start,s.frame_end, context.scene.render_prop.frames):
                             s.frame_current = i
 
                             s.render.filepath = (
@@ -422,7 +429,7 @@ class RenderOperator(bpy.types.Operator):
                                                      
         return {'FINISHED'}
 
-bpy.utils.register_class(TEST_PT_panel_p)
+bpy.utils.register_class(RENDER_PT_panel_p)
 bpy.utils.register_class(RenderOperator)
 
 bpy.context.scene.my_list.clear()
@@ -431,13 +438,14 @@ bpy.context.scene.my_list.clear()
 for a in bpy.data.actions:
     item = bpy.context.scene.my_list.add()
     item.name = a.name
+    
         
 def register():
-    bpy.utils.register_class(OT_TestOpenFilebrowser)
+    bpy.utils.register_class(OT_OpenFilebrowser)
 
 
 def unregister():
-    bpy.utils.unregister_class(OT_TestOpenFilebrowser)
+    bpy.utils.unregister_class(OT_OpenFilebrowser)
 
 
 if __name__ == "__main__":
