@@ -16,14 +16,81 @@ from bpy.types import (Panel,
                        )
 from bpy_extras.io_utils import ImportHelper
 from bpy.types import Operator
-                       
+
+import json
+
+import mathutils
+from bpy_extras.object_utils import world_to_camera_view
+
+def get_camera_2d_origin():
+    scene = bpy.context.scene
+
+    # Getting resolution of the final render ( important to know where in pixel the point is )
+    render = scene.render
+    res_x = render.resolution_x
+    res_y = render.resolution_y
+
+    # Getting the current camera
+    cam = bpy.context.scene.camera
+
+    # The actual XYZ location of the origin
+    coords = mathutils.Vector((0.0, 0.0, 0.0))
+
+    # Voodoo magic blender can do to find the coordinate of the point, from camera XYZ 
+    coords_2d = world_to_camera_view(scene, cam, coords) 
+
+    origin_x = coords_2d.x * res_x
+    origin_y = res_y - (coords_2d.y * res_y)
+
+    return mathutils.Vector((round(origin_x), round(origin_y)))
+
+class ModalTimerOperator(Operator):
+    """Operator which runs its self from a timer"""
+    bl_idname = "render.modal_timer_operator"
+    bl_label = "Modal Timer Operator"
+    
+    updated = False
+    end_early = False
+    _timer = None
+    
+    def modal(self, context, event):
+        if event.type in {'RIGHTMOUSE', 'ESC'}:
+            self.cancel(context)
+            return {'CANCELLED'}
+
+        if event.type == 'TIMER':
+            print("do in timer")
+            # change theme color, silly!
+            #color = context.preferences.themes[0].view_3d.space.gradients.high_gradient
+            #color.s = 1.0
+            #color.h += 0.01
+
+        return {'PASS_THROUGH'}
+    
+    def execute(self, context):
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(0.1, window=context.window)
+        wm.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+    
+    def cancel(self, context):
+        wm = context.window_manager
+        wm.event_timer_remove(self._timer)
+
 class RenderPropGroup(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(name="name", default="Text")
     dirname: bpy.props.StringProperty(name="Output", default="/tmp/")
     value: bpy.props.IntProperty(name="value", default=5)
-    res_x: bpy.props.IntProperty(name="Resolution X", default=256)
-    res_y: bpy.props.IntProperty(name="Resolution Y", default=256)
     frames: bpy.props.IntProperty(name="Frames (1/x)", default=4)
+    directions: bpy.props.EnumProperty(items=[
+        ('direction1','1','number of directions to render'),
+        ('direction2','2','number of directions to render'),
+        ('direction4','4','number of directions to render'),
+        ('direction8','8','number of directions to render'),
+        ('direction16','16','number of directions to render'),
+        ('direction32','32','number of directions to render'),
+        ])
+    cardinal_names: bpy.props.BoolProperty(name="Generate cardinal direction names", description="If activated use E, NE, N, NW, W, SW, S, SE for <= 8 directions. Otherwise generate angle names.", default=True)
     direction_E: bpy.props.BoolProperty(name="E", default=True)
     direction_NE: bpy.props.BoolProperty(name="NE", default=True)
     direction_N: bpy.props.BoolProperty(name="N", default=True)
@@ -223,10 +290,13 @@ class RENDER_PT_panel_p(bpy.types.Panel):
         self.layout.label(text="Settings to export rendered images:")
  
         row = self.layout.row()
-        row.prop(context.scene.render_prop, "res_x")
-        row.prop(context.scene.render_prop, "res_y")
-        row = self.layout.row()
         row.prop(context.scene.render_prop, "frames")
+        
+        row = self.layout.row()
+        row.prop(context.scene.render_prop, "directions")
+        
+        row = self.layout.row()
+        row.prop(context.scene.render_prop, "cardinal_names")
         
         self.layout.label(text="Directions:")
         row = self.layout.row()
@@ -266,6 +336,8 @@ class RENDER_PT_panel_p(bpy.types.Panel):
             text=''
         )
          
+        
+        # 'render.modal_timer_operator',
         # render operator call
         self.layout.operator(
             operator='object.render_operator',
@@ -304,11 +376,11 @@ class RenderOperator(bpy.types.Operator):
         # only to debug the render operation
         #return {'FINISHED'}
 
-        path = context.scene.render_prop.dirname
+        render_path = context.scene.render_prop.dirname
         # path fixing
-        path = os.path.abspath(path)
+        render_path = os.path.abspath(render_path)
         
-        print("renderpath: " + path)
+        print("renderpath: " + render_path)
 
         # get list of selected objects
         selected_list = bpy.context.selected_objects
@@ -317,10 +389,6 @@ class RenderOperator(bpy.types.Operator):
         bpy.ops.object.select_all(action='TOGGLE')
 
         s = bpy.context.scene
-
-        s.render.resolution_x = context.scene.render_prop.res_x
-        s.render.resolution_y = context.scene.render_prop.res_y
-
         
         # I left this in as in some of my models, I needed to translate the "root" object but
         # the animations were on the armature which I selected.
@@ -335,6 +403,26 @@ class RenderOperator(bpy.types.Operator):
         if only_armatures == False:
             self.report({'WARNING'}, "Please select only Armatures. (Current: %s)" % o.type)
             return {'FINISHED'}
+        
+        coord = get_camera_2d_origin()
+        
+        json_dict = {
+          "origin": {
+            "x": int(coord.x),
+            "y": int(coord.y)
+          },
+          #"Customer": "Jason Sweet",
+          #"Quantity": 1,
+          #"Price": 18.00
+        }
+
+        json_str = json.dumps(json_dict, indent=4)
+        
+        json_filename = os.path.join(render_path, "metadata.json")
+
+        # write JSON file
+        with open(json_filename, 'w') as outfile:
+            outfile.write(json_str + '\n')
         
         # loop all initial selected objects (which will likely just be one object.. I haven't tried setting up multiple yet)        
         for o in selected_list:
@@ -360,7 +448,7 @@ class RenderOperator(bpy.types.Operator):
                 #if (a.name == name):
                 
                 #create folder for animation
-                action_folder = os.path.join(path, item.name)
+                action_folder = os.path.join(render_path, item.name)
                 if not os.path.exists(action_folder):
                     os.makedirs(action_folder)
                 
@@ -393,7 +481,7 @@ class RenderOperator(bpy.types.Operator):
                         or (angle == 270 and context.scene.render_prop.direction_S == True)
                         or (angle == 315 and context.scene.render_prop.direction_SE == True)
                         ):
-                        
+                                                    
                         #create folder for specific angle
                         animation_folder = os.path.join(action_folder, angleDir)
                         if not os.path.exists(animation_folder):
@@ -429,8 +517,36 @@ class RenderOperator(bpy.types.Operator):
                                                      
         return {'FINISHED'}
 
-bpy.utils.register_class(RENDER_PT_panel_p)
-bpy.utils.register_class(RenderOperator)
+
+def register():
+    bpy.utils.register_class(RENDER_PT_panel_p)
+    bpy.utils.register_class(RenderOperator)
+    bpy.utils.register_class(OT_OpenFilebrowser)
+    
+    # progress bar
+    #bpy.types.Text.progress_bar = bpy.props.IntProperty(
+#                                subtype="PERCENTAGE",
+#                                min=0,
+#                                max=100
+#                                )
+    #bpy.types.Text.show_progress_bar = bpy.props.BoolProperty()
+    #bpy.utils.register_class(ModalTimerOperator)
+    #bpy.types.TEXT_HT_header.append(header_draw_func)
+
+
+def unregister():
+    bpy.utils.unregister_class(RENDER_PT_panel_p)
+    bpy.utils.unregister_class(RenderOperator)
+    bpy.utils.unregister_class(OT_OpenFilebrowser)
+
+    # progress bar
+    #del bpy.types.Text.progress_bar
+    #del bpy.types.Text.show_progress_bar
+    #bpy.utils.unregister_class(ModalTimerOperator)
+    #bpy.types.TEXT_HT_header.remove(header_draw_func)
+
+if __name__ == "__main__":
+    register()
 
 bpy.context.scene.my_list.clear()
 
@@ -439,15 +555,4 @@ for a in bpy.data.actions:
     item = bpy.context.scene.my_list.add()
     item.name = a.name
     
-        
-def register():
-    bpy.utils.register_class(OT_OpenFilebrowser)
-
-
-def unregister():
-    bpy.utils.unregister_class(OT_OpenFilebrowser)
-
-
-if __name__ == "__main__":
-    register()
 
