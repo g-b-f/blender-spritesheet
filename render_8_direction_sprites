@@ -82,23 +82,16 @@ class RenderPropGroup(bpy.types.PropertyGroup):
     dirname: bpy.props.StringProperty(name="Output", default="/tmp/")
     value: bpy.props.IntProperty(name="value", default=5)
     frames: bpy.props.IntProperty(name="Frames (1/x)", default=4)
-    directions: bpy.props.EnumProperty(items=[
-        ('direction1','1','number of directions to render'),
-        ('direction2','2','number of directions to render'),
-        ('direction4','4','number of directions to render'),
-        ('direction8','8','number of directions to render'),
-        ('direction16','16','number of directions to render'),
-        ('direction32','32','number of directions to render'),
+    directions: bpy.props.EnumProperty(name="Directions", description="How many object directions to render", items=[
+        ('1','1', 'number of directions to render'),
+        ('2','2','number of directions to render'),
+        ('4','4','number of directions to render'),
+        ('8','8','number of directions to render'),
+        ('16','16','number of directions to render'),
+        ('32','32','number of directions to render'),
         ])
     cardinal_names: bpy.props.BoolProperty(name="Generate cardinal direction names", description="If activated use E, NE, N, NW, W, SW, S, SE for <= 8 directions. Otherwise generate angle names.", default=True)
-    direction_E: bpy.props.BoolProperty(name="E", default=True)
-    direction_NE: bpy.props.BoolProperty(name="NE", default=True)
-    direction_N: bpy.props.BoolProperty(name="N", default=True)
-    direction_NW: bpy.props.BoolProperty(name="NW", default=True)
-    direction_W: bpy.props.BoolProperty(name="W", default=True)
-    direction_SW: bpy.props.BoolProperty(name="SW", default=True)
-    direction_S: bpy.props.BoolProperty(name="S", default=True)
-    direction_SE: bpy.props.BoolProperty(name="SE", default=True)
+    facing_angle: bpy.props.IntProperty(name="Facing Angle", description="Left oriented rotation angle compared to a character looking to the north view (top of the screen).", default=0)
     
 bpy.utils.register_class(RenderPropGroup)
 
@@ -296,22 +289,11 @@ class RENDER_PT_panel_p(bpy.types.Panel):
         row.prop(context.scene.render_prop, "directions")
         
         row = self.layout.row()
+        row.prop(context.scene.render_prop, "facing_angle")
+        
+        row = self.layout.row()
         row.prop(context.scene.render_prop, "cardinal_names")
-        
-        self.layout.label(text="Directions:")
-        row = self.layout.row()
-        row.prop(context.scene.render_prop, "direction_E")
-        row.prop(context.scene.render_prop, "direction_NE")
-        row.prop(context.scene.render_prop, "direction_N")
-        row.prop(context.scene.render_prop, "direction_NW")
-        row = self.layout.row()
-        row.prop(context.scene.render_prop, "direction_W")
-        row.prop(context.scene.render_prop, "direction_SW")
-        row.prop(context.scene.render_prop, "direction_S")
-        row.prop(context.scene.render_prop, "direction_SE")
-        
-        #row.prop_search(bpy.context.scene, "*",  bpy.data, "armatures")
-        
+                        
         split = self.layout.split(factor=0.92)
         
         col = split.column()
@@ -363,6 +345,28 @@ class RenderOperator(bpy.types.Operator):
     bl_idname = "object.render_operator"
     bl_label = "Render Operator"
 
+    def get_cardinal_name(self, angle):
+        angle_name = "angle_error"
+        
+        if angle == 0:
+            angle_name = "N"
+        elif angle == 45:
+            angle_name = "NW"
+        elif angle == 90:
+            angle_name = "W"
+        elif angle == 135:
+            angle_name = "SW"
+        elif angle == 180:
+            angle_name = "S"
+        elif angle == 225:
+            angle_name = "SE"
+        elif angle == 270:
+            angle_name = "E"
+        elif angle == 315:
+            angle_name = "NE"
+            
+        return angle_name
+
     def execute(self, context):
         print("Hello Render")
         
@@ -379,7 +383,9 @@ class RenderOperator(bpy.types.Operator):
         render_path = context.scene.render_prop.dirname
         # path fixing
         render_path = os.path.abspath(render_path)
-        
+        if not os.path.exists(render_path):
+            os.makedirs(render_path)
+                            
         print("renderpath: " + render_path)
 
         # get list of selected objects
@@ -387,8 +393,6 @@ class RenderOperator(bpy.types.Operator):
 
         # deselect all in scene
         bpy.ops.object.select_all(action='TOGGLE')
-
-        s = bpy.context.scene
         
         # I left this in as in some of my models, I needed to translate the "root" object but
         # the animations were on the armature which I selected.
@@ -423,7 +427,12 @@ class RenderOperator(bpy.types.Operator):
         # write JSON file
         with open(json_filename, 'w') as outfile:
             outfile.write(json_str + '\n')
-        
+                    
+        # calculate based on number of directions about which angle should be rotated each image
+        # TBD: this doesn't create good angles for case 16 and 32. why? rounding problem?
+        directions = int(context.scene.render_prop.directions)
+        angle_rot = int(360 / directions)
+                    
         # loop all initial selected objects (which will likely just be one object.. I haven't tried setting up multiple yet)        
         for o in selected_list:
                         
@@ -453,68 +462,52 @@ class RenderOperator(bpy.types.Operator):
                     os.makedirs(action_folder)
                 
                 #loop through all 8 directions
-                for angle in range(0, 360, 45):
-                    if angle == 0:
-                        angleDir = "E"
-                    if angle == 45:
-                        angleDir = "NE"
-                    if angle == 90:
-                        angleDir = "N"
-                    if angle == 135:
-                        angleDir = "NW"
-                    if angle == 180:
-                        angleDir = "W"
-                    if angle == 225:
-                        angleDir = "SW"
-                    if angle == 270:
-                        angleDir = "S"
-                    if angle == 315:
-                        angleDir = "SE"
+                for direction_num in range(directions):
+                    angle = direction_num * angle_rot
+                    
+                    if context.scene.render_prop.cardinal_names:
+                        angleDir = self.get_cardinal_name(angle)
+                    else:
+                        angleDir = str(angle)
+                    print("angleDir: ", angleDir)
                         
-                    #set which angles we want to render.
-                    if (   (angle == 0 and context.scene.render_prop.direction_E == True)
-                        or (angle == 45 and context.scene.render_prop.direction_NE == True)
-                        or (angle == 90 and context.scene.render_prop.direction_N == True)
-                        or (angle == 135 and context.scene.render_prop.direction_NW == True)
-                        or (angle == 180 and context.scene.render_prop.direction_W == True)
-                        or (angle == 225 and context.scene.render_prop.direction_SW == True)
-                        or (angle == 270 and context.scene.render_prop.direction_S == True)
-                        or (angle == 315 and context.scene.render_prop.direction_SE == True)
-                        ):
-                                                    
-                        #create folder for specific angle
-                        animation_folder = os.path.join(action_folder, angleDir)
-                        if not os.path.exists(animation_folder):
-                            os.makedirs(animation_folder)
-                        
-                        #rotate the model for the new angle
-                        bpy.context.active_object.rotation_euler[2] = math.radians(angle)
-                        
-                        # the below is for the use case where the root needed to be translated.
-                        # obRoot.rotation_euler[2] = math.radians(angle)
-                        
-                        # loop through and render frames.  The UI sets how "often" it renders.
-                        # Every frame is likely not needed.                          
-                        for i in range(s.frame_start,s.frame_end, context.scene.render_prop.frames):
-                            s.frame_current = i
+                     
+                    #create folder for specific angle
+                    animation_folder = os.path.join(action_folder, angleDir)
+                    if not os.path.exists(animation_folder):
+                        os.makedirs(animation_folder)
+                    
+                    #rotate the model for the new angle
+                    bpy.context.active_object.rotation_euler[2] = math.radians(angle - context.scene.render_prop.facing_angle)
+                    
+                    # the below is for the use case where the root needed to be translated.
+                    # obRoot.rotation_euler[2] = math.radians(angle)
+                    
+                    # loop through and render frames.  The UI sets how "often" it renders.
+                    # Every frame is likely not needed.                          
+                    for i in range(scn.frame_start,scn.frame_end, context.scene.render_prop.frames):
+                        scn.frame_current = i
 
-                            s.render.filepath = (
-                                                animation_folder
-                                                + "\\"
-                                                + str(item.name)
-                                                + "_"
-                                                + str(angle)
-                                                + "_"
-                                                + str(s.frame_current).zfill(3)
-                                                )
-                                                
-                            bpy.ops.render.render( #{'dict': "override"},
-                                                  #'INVOKE_DEFAULT',  
-                                                  False,            # undo support
-                                                  animation=False, 
-                                                  write_still=True
-                                                 )
-                                                     
+                        scn.render.filepath = (
+                                            animation_folder
+                                            + "\\"
+                                            + str(item.name)
+                                            + "_"
+                                            + str(angle)
+                                            + "_"
+                                            + str(scn.frame_current).zfill(3)
+                                            )
+                                            
+                        bpy.ops.render.render( #{'dict': "override"},
+                                              #'INVOKE_DEFAULT',  
+                                              False,            # undo support
+                                              animation=False, 
+                                              write_still=True
+                                             )
+        
+        # after rotation for export reset the z rotation back to zero 
+        bpy.context.active_object.rotation_euler[2] = 0
+                                                    
         return {'FINISHED'}
 
 
