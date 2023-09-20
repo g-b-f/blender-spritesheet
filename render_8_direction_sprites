@@ -364,8 +364,19 @@ class RenderOperator(bpy.types.Operator):
             angle_name = "E"
         elif angle == 315:
             angle_name = "NE"
+        elif angle == 360: # not needed, but who knows...
+            angle_name = "N"
             
         return angle_name
+
+    def get_cardinal_angle(self, directions, direction_num) -> int:
+        if direction_num > directions:
+            return 0
+        
+        angle_slice = 360 / directions
+        angle = round(direction_num * angle_slice)
+               
+        return angle
 
     def execute(self, context):
         print("Hello Render")
@@ -410,14 +421,28 @@ class RenderOperator(bpy.types.Operator):
         
         coord = get_camera_2d_origin()
         
+        ortho_scale = bpy.context.scene.camera.data.ortho_scale
+        cam_location = bpy.context.scene.camera.location
+        cam_shift_x = bpy.context.scene.camera.data.shift_x
+        cam_shift_y = bpy.context.scene.camera.data.shift_y
+
         json_dict = {
           "origin": {
-            "x": int(coord.x),
-            "y": int(coord.y)
+               "x": int(coord.x),
+               "y": int(coord.y)
           },
-          #"Customer": "Jason Sweet",
-          #"Quantity": 1,
-          #"Price": 18.00
+          "camera": {
+              "ortho_scale": ortho_scale,
+              "location": {
+                "x": cam_location[0],
+                "y": cam_location[1],
+                "z": cam_location[2],
+              },
+              "shift": {
+                "x": cam_shift_x,
+                "y": cam_shift_y,
+              },
+          }
         }
 
         json_str = json.dumps(json_dict, indent=4)
@@ -431,7 +456,6 @@ class RenderOperator(bpy.types.Operator):
         # calculate based on number of directions about which angle should be rotated each image
         # TBD: this doesn't create good angles for case 16 and 32. why? rounding problem?
         directions = int(context.scene.render_prop.directions)
-        angle_rot = int(360 / directions)
                     
         # loop all initial selected objects (which will likely just be one object.. I haven't tried setting up multiple yet)        
         for o in selected_list:
@@ -452,25 +476,20 @@ class RenderOperator(bpy.types.Operator):
                 
                 #dynamically set the last frame to render based on action
                 scn.frame_end = int(bpy.context.active_object.animation_data.action.frame_range[1])
-                
-                #set which actions you want to render.  Make sure to use the exact name of the action!
-                #if (a.name == name):
-                
+                                
                 #create folder for animation
                 action_folder = os.path.join(render_path, item.name)
                 if not os.path.exists(action_folder):
                     os.makedirs(action_folder)
                 
-                #loop through all 8 directions
+                #loop through all directions
                 for direction_num in range(directions):
-                    angle = direction_num * angle_rot
+                    angle = self.get_cardinal_angle(directions, direction_num)
                     
-                    if context.scene.render_prop.cardinal_names:
+                    if context.scene.render_prop.cardinal_names and directions <= 8:
                         angleDir = self.get_cardinal_name(angle)
                     else:
-                        angleDir = str(angle)
-                    print("angleDir: ", angleDir)
-                        
+                        angleDir = str(angle)   
                      
                     #create folder for specific angle
                     animation_folder = os.path.join(action_folder, angleDir)
@@ -547,5 +566,4 @@ bpy.context.scene.my_list.clear()
 for a in bpy.data.actions:
     item = bpy.context.scene.my_list.add()
     item.name = a.name
-    
-
+ 
