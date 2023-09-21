@@ -5,3 +5,15 @@ bl_info = {
 }
 
 from . import blender_render_direction
+
+def register():
+    blender_render_direction.register()
+    print("Hello World")
+
+
+def unregister():
+    blender_render_direction.unregister()
+    print("Goodbye World")
+
+if __name__ == "__main__":
+    register()

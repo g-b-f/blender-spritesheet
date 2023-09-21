@@ -22,6 +22,8 @@ import json
 import mathutils
 from bpy_extras.object_utils import world_to_camera_view
 
+
+
 def get_camera_2d_origin():
     scene = bpy.context.scene
 
@@ -77,23 +79,8 @@ class ModalTimerOperator(Operator):
         wm = context.window_manager
         wm.event_timer_remove(self._timer)
 
-class RenderPropGroup(bpy.types.PropertyGroup):
-    name: bpy.props.StringProperty(name="name", default="Text")
-    dirname: bpy.props.StringProperty(name="Output", default="/tmp/")
-    value: bpy.props.IntProperty(name="value", default=5)
-    frames: bpy.props.IntProperty(name="Frames (1/x)", default=4)
-    directions: bpy.props.EnumProperty(name="Directions", description="How many object directions to render", items=[
-        ('1','1', 'number of directions to render'),
-        ('2','2','number of directions to render'),
-        ('4','4','number of directions to render'),
-        ('8','8','number of directions to render'),
-        ('16','16','number of directions to render'),
-        ('32','32','number of directions to render'),
-        ])
-    cardinal_names: bpy.props.BoolProperty(name="Generate cardinal direction names", description="If activated use E, NE, N, NW, W, SW, S, SE for <= 8 directions. Otherwise generate angle names.", default=True)
-    facing_angle: bpy.props.IntProperty(name="Facing Angle", description="Left oriented rotation angle compared to a character looking to the north view (top of the screen).", default=0)
-    
-bpy.utils.register_class(RenderPropGroup)
+
+
 
 class OT_OpenFilebrowser(Operator, ImportHelper):
 
@@ -144,10 +131,10 @@ class ListItem(PropertyGroup):
         name="Any other property you want", 
         description="", default="")
 
-bpy.utils.register_class(ListItem)
+
 
 class MY_UL_List(UIList):
-    """Demo UIList."""
+    """Actions UIList."""
 
     def draw_item(self, context, layout, data, item, icon, active_data,
                   active_propname, index):
@@ -168,7 +155,31 @@ class MY_UL_List(UIList):
 
         layout.enabled = item.active
 
-bpy.utils.register_class(MY_UL_List)
+    def draw(self, context):
+        print("draw")
+
+class RenderPropGroup(bpy.types.PropertyGroup):
+    name: bpy.props.StringProperty(name="name", default="Text")
+    dirname: bpy.props.StringProperty(name="Output", default="/tmp/")
+    value: bpy.props.IntProperty(name="value", default=5)
+    frames: bpy.props.IntProperty(name="Frames (1/x)", default=4)
+
+    my_list: bpy.props.CollectionProperty(type = ListItem)
+        
+    list_index: bpy.props.IntProperty(name = "Index for my_list", default = 0)
+
+
+    directions: bpy.props.EnumProperty(name="Directions", description="How many object directions to render", items=[
+        ('1','1', 'number of directions to render'),
+        ('2','2','number of directions to render'),
+        ('4','4','number of directions to render'),
+        ('8','8','number of directions to render'),
+        ('16','16','number of directions to render'),
+        ('32','32','number of directions to render'),
+        ])
+    cardinal_names: bpy.props.BoolProperty(name="Generate cardinal direction names", description="If activated use E, NE, N, NW, W, SW, S, SE for <= 8 directions. Otherwise generate angle names.", default=True)
+    facing_angle: bpy.props.IntProperty(name="Facing Angle", description="Left oriented rotation angle compared to a character looking to the north view (top of the screen).", default=0)
+    
 
 class LIST_OT_NewItem(Operator):
     """Add a new item to the list."""
@@ -181,7 +192,7 @@ class LIST_OT_NewItem(Operator):
 
         return{'FINISHED'}
 
-bpy.utils.register_class(LIST_OT_NewItem)
+
 
 class LIST_OT_DeleteItem(Operator):
     """Delete the selected item from the list."""
@@ -202,7 +213,7 @@ class LIST_OT_DeleteItem(Operator):
 
         return{'FINISHED'}
 
-bpy.utils.register_class(LIST_OT_DeleteItem)
+
 
 class LIST_OT_ActivateItem(Operator):
     """Activate the selected item from the list."""
@@ -212,17 +223,17 @@ class LIST_OT_ActivateItem(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.my_list
+        return context.scene.render_prop.my_list
 
     def execute(self, context):
-        my_list = context.scene.my_list
-        index = context.scene.list_index
+        my_list = context.scene.render_prop.my_list
+        index = context.scene.render_prop.list_index
         
-        context.scene.my_list[index].active = True
+        context.scene.render_prop.my_list[index].active = True
 
         return{'FINISHED'}
     
-bpy.utils.register_class(LIST_OT_ActivateItem)
+
  
 class LIST_OT_DeactivateItem(Operator):
     """Deactivate the selected item from the list."""
@@ -232,42 +243,33 @@ class LIST_OT_DeactivateItem(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.my_list
+        return context.scene.render_prop.my_list
 
     def execute(self, context):
-        my_list = context.scene.my_list
-        index = context.scene.list_index
+        my_list = ontext.scene.render_prop.my_list
+        index = context.scene.render_prop.list_index
         
-        context.scene.my_list[index].active = False
+        context.scene.render_prop.my_list[index].active = False
 
         return{'FINISHED'}
     
-bpy.utils.register_class(LIST_OT_DeactivateItem)
-
-class LIST_OT_ClearList(Operator):
+class LIST_OT_UpdateList(Operator):
     """Clear all items of the list"""
-    bl_idname = "my_list.clear_list"
-    bl_label = "Clear List"
-    bl_description = "Clear all items of the list"
+    bl_idname = "my_list.update_list"
+    bl_label = "Update List"
+    bl_description = "Update all items of the list"
     bl_options = {'INTERNAL'}
 
-    @classmethod
-    def poll(cls, context):
-        return bool(context.scene.my_list)
-
-    def invoke(self, context, event):
-        return context.window_manager.invoke_confirm(self, event)
-
     def execute(self, context):
-        if bool(context.scene.my_list):
-            context.scene.my_list.clear()
-            self.report({'INFO'}, "All items removed")
-        else:
-            self.report({'INFO'}, "Nothing to remove")
+        print("execute")
+        context.scene.render_prop.my_list.clear()
+        for a in bpy.data.actions:
+            print(a.name)
+            item = context.scene.render_prop.my_list.add()
+            item.name = a.name
+        self.report({'INFO'}, "All items updated")
+
         return {'FINISHED'}
-
-bpy.utils.register_class(LIST_OT_ClearList)
-
 
 class RENDER_PT_panel_p(bpy.types.Panel):
     bl_idname = 'RENDER_PT_panel_p'
@@ -275,7 +277,7 @@ class RENDER_PT_panel_p(bpy.types.Panel):
     bl_region_type = 'WINDOW'
     bl_context = "output"
     bl_label = 'Direction Renderer'
- 
+
     def draw(self, context):
         scene = context.scene
         object = context.object
@@ -297,12 +299,14 @@ class RENDER_PT_panel_p(bpy.types.Panel):
         split = self.layout.split(factor=0.92)
         
         col = split.column()
-        col.template_list("MY_UL_List", "The_List", scene,
-                          "my_list", scene, "list_index")
+        col.template_list("MY_UL_List", "The_List", context.scene.render_prop,
+                          "my_list", context.scene.render_prop, "list_index")
 
         col = split.column()
         col.operator('my_list.activate_item', text='', icon='CHECKBOX_HLT')
         col.operator('my_list.deactivate_item', text='', icon='CHECKBOX_DEHLT')
+        col.operator('my_list.update_list', text='', icon='PREVIEW_RANGE')
+
 
         row = self.layout.row()
 
@@ -323,22 +327,41 @@ class RENDER_PT_panel_p(bpy.types.Panel):
         # render operator call
         self.layout.operator(
             operator='object.render_operator',
-            icon='RENDER_RESULT',
+            icon='RENDER_ANIMATION',
             text='Create direction images'
         )
 
-        
+        #for a in bpy.data.actions:
+        #    print(a.name)
+        #    item = context.scene.render_prop.my_list.add()
+        #    item.name = a.name
+
+     
+
     def register():
         bpy.types.Scene.render_prop = bpy.props.PointerProperty(type=RenderPropGroup)
-        bpy.types.Scene.my_list = CollectionProperty(type = ListItem)
+
+        pass
+        #bpy.types.Scene.my_list.clear()
         
-        bpy.types.Scene.list_index = IntProperty(name = "Index for my_list", default = 0)
+        #item = bpy.types.Scene.render_prop.my_list.add()
+        #item.name = "test"
+
+        # populate the action animations list with items
+        #for a in bpy.data.actions:
+        #    item = bpy.context.scene.my_list.add()
+        #    item.name = a.name
+
+        
+
 
         #bpy.types.Scene.float_x = bpy.props.FloatProperty(default=4.5)
         #bpy.types.Scene.cube_x = bpy.props.IntProperty()
         
     def unregister():
         del bpy.types.Scene.render_prop
+        #del bpy.types.Scene.my_list
+
 
 
 class RenderOperator(bpy.types.Operator):
@@ -466,7 +489,7 @@ class RenderOperator(bpy.types.Operator):
             scn = bpy.context.scene
 
             # loop through the actions
-            for item in context.scene.my_list:
+            for item in context.scene.render_prop.my_list:
                 # render only in the UIList activated actions
                 if item.active == False:
                     continue
@@ -529,11 +552,24 @@ class RenderOperator(bpy.types.Operator):
                                                     
         return {'FINISHED'}
 
+classes = [
+    ListItem,
+    MY_UL_List,
+    RenderPropGroup,
+    LIST_OT_NewItem,
+    LIST_OT_DeleteItem,
+    LIST_OT_ActivateItem,
+    LIST_OT_DeactivateItem,
+    LIST_OT_UpdateList,
+    RENDER_PT_panel_p,
+    RenderOperator,
+    OT_OpenFilebrowser
+]
 
 def register():
-    bpy.utils.register_class(RENDER_PT_panel_p)
-    bpy.utils.register_class(RenderOperator)
-    bpy.utils.register_class(OT_OpenFilebrowser)
+    from bpy.utils import register_class
+    for cls in classes:
+        bpy.utils.register_class(cls)
     
     # progress bar
     #bpy.types.Text.progress_bar = bpy.props.IntProperty(
@@ -547,9 +583,10 @@ def register():
 
 
 def unregister():
-    bpy.utils.unregister_class(RENDER_PT_panel_p)
-    bpy.utils.unregister_class(RenderOperator)
-    bpy.utils.unregister_class(OT_OpenFilebrowser)
+    from bpy.utils import unregister_class
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
+
 
     # progress bar
     #del bpy.types.Text.progress_bar
@@ -557,13 +594,8 @@ def unregister():
     #bpy.utils.unregister_class(ModalTimerOperator)
     #bpy.types.TEXT_HT_header.remove(header_draw_func)
 
-if __name__ == "__main__":
-    register()
 
-bpy.context.scene.my_list.clear()
 
-# populate the action animations list with items
-for a in bpy.data.actions:
-    item = bpy.context.scene.my_list.add()
-    item.name = a.name
- 
+
+
+
