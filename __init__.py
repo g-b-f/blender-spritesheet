@@ -15,5 +15,3 @@ def unregister():
     blender_render_direction.unregister()
     print("Goodbye World")
 
-if __name__ == "__main__":
-    register()

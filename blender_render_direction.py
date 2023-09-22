@@ -594,8 +594,5 @@ def unregister():
     #bpy.utils.unregister_class(ModalTimerOperator)
     #bpy.types.TEXT_HT_header.remove(header_draw_func)
 
-
-
-
-
-
+if __name__ == "__main__":
+    register()
