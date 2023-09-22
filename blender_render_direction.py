@@ -246,7 +246,7 @@ class LIST_OT_DeactivateItem(Operator):
         return context.scene.render_prop.my_list
 
     def execute(self, context):
-        my_list = ontext.scene.render_prop.my_list
+        my_list = context.scene.render_prop.my_list
         index = context.scene.render_prop.list_index
         
         context.scene.render_prop.my_list[index].active = False
