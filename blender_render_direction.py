@@ -402,7 +402,7 @@ class RenderOperator(bpy.types.Operator):
         return angle
 
     def execute(self, context):
-        print("Hello Render")
+        print("Execute Render")
         
         #index = context.scene.list_index
         #name = context.scene.my_list[index].name
@@ -448,37 +448,15 @@ class RenderOperator(bpy.types.Operator):
         cam_location = bpy.context.scene.camera.location
         cam_shift_x = bpy.context.scene.camera.data.shift_x
         cam_shift_y = bpy.context.scene.camera.data.shift_y
-
-        json_dict = {
-          "origin": {
-               "x": int(coord.x),
-               "y": int(coord.y)
-          },
-          "camera": {
-              "ortho_scale": ortho_scale,
-              "location": {
-                "x": cam_location[0],
-                "y": cam_location[1],
-                "z": cam_location[2],
-              },
-              "shift": {
-                "x": cam_shift_x,
-                "y": cam_shift_y,
-              },
-          }
-        }
-
-        json_str = json.dumps(json_dict, indent=4)
-        
-        json_filename = os.path.join(render_path, "metadata.json")
-
-        # write JSON file
-        with open(json_filename, 'w') as outfile:
-            outfile.write(json_str + '\n')
                     
         # calculate based on number of directions about which angle should be rotated each image
         # TBD: this doesn't create good angles for case 16 and 32. why? rounding problem?
         directions = int(context.scene.render_prop.directions)
+        
+        blender_fps = bpy.context.scene.render.fps / bpy.context.scene.render.fps_base
+        
+        img_width = bpy.context.scene.render.resolution_x
+        img_height = bpy.context.scene.render.resolution_y
                     
         # loop all initial selected objects (which will likely just be one object.. I haven't tried setting up multiple yet)        
         for o in selected_list:
@@ -526,18 +504,25 @@ class RenderOperator(bpy.types.Operator):
                     # obRoot.rotation_euler[2] = math.radians(angle)
                     
                     # loop through and render frames.  The UI sets how "often" it renders.
-                    # Every frame is likely not needed.                          
+                    # Every frame is likely not needed.
+                    json_frames = []
                     for i in range(scn.frame_start,scn.frame_end, context.scene.render_prop.frames):
                         scn.frame_current = i
 
-                        scn.render.filepath = (
-                                            animation_folder
-                                            + "\\"
-                                            + str(item.name)
+                        json_frame = {}
+                        render_filename = (str(item.name)
                                             + "_"
                                             + str(angle)
                                             + "_"
                                             + str(scn.frame_current).zfill(3)
+                                            )
+                        json_frame['name'] = render_filename
+                        #json_frame['time'] = round(scn.frame_current / export_fps, 2)
+                                                
+                        scn.render.filepath = (
+                                            animation_folder
+                                            + "/"
+                                            + render_filename
                                             )
                                             
                         bpy.ops.render.render( #{'dict': "override"},
@@ -546,6 +531,41 @@ class RenderOperator(bpy.types.Operator):
                                               animation=False, 
                                               write_still=True
                                              )
+                        json_frames.append(json_frame)
+                                             
+                    json_dict = {
+                      "fps": blender_fps / context.scene.render_prop.frames,
+                      "origin": {
+                           "x": int(coord.x),
+                           "y": int(coord.y)
+                      },
+                      "camera": {
+                          "ortho_scale": round(ortho_scale, 2),
+                          "location": {
+                            "x": round(cam_location[0], 2),
+                            "y": round(cam_location[1], 2),
+                            "z": round(cam_location[2], 2),
+                          },
+                          "shift": {
+                            "x": round(cam_shift_x, 2),
+                            "y": round(cam_shift_y, 2),
+                          },
+                      },
+                      "animations": {
+                            item.name: {
+                                angleDir: json_frames
+                            },                         
+                        },
+                    }
+
+                    json_str = json.dumps(json_dict, indent=4)
+                    
+                    json_filename = os.path.join(animation_folder, "metadata.json")
+                    print("json_filename: " + json_filename)
+
+                    # write JSON file
+                    with open(json_filename, 'w') as outfile:
+                        outfile.write(json_str + '\n')
         
         # after rotation for export reset the z rotation back to zero 
         bpy.context.active_object.rotation_euler[2] = 0
