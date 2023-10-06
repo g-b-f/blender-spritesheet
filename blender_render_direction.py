@@ -162,7 +162,10 @@ class RenderPropGroup(bpy.types.PropertyGroup):
     name: bpy.props.StringProperty(name="name", default="Text")
     dirname: bpy.props.StringProperty(name="Output", default="/tmp/")
     value: bpy.props.IntProperty(name="value", default=5)
-    frames: bpy.props.IntProperty(name="Frames (1/x)", default=4)
+    frameStart: bpy.props.IntProperty(name="Frame start", default=0)
+    frameEnd: bpy.props.IntProperty(name="Frame end", default=100)
+    frames: bpy.props.IntProperty(name="Frame step", default=1, description="Number of frames to skip while rendering")
+
 
     my_list: bpy.props.CollectionProperty(type = ListItem)
         
@@ -178,6 +181,7 @@ class RenderPropGroup(bpy.types.PropertyGroup):
         ('32','32','number of directions to render'),
         ])
     cardinal_names: bpy.props.BoolProperty(name="Generate cardinal direction names", description="If activated use E, NE, N, NW, W, SW, S, SE for <= 8 directions. Otherwise generate angle names.", default=True)
+    make_json: bpy.props.BoolProperty(name="Generate JSON", description="Create a JSON file for each direction", default=True)
     facing_angle: bpy.props.IntProperty(name="Facing Angle", description="Left oriented rotation angle compared to a character looking to the north view (top of the screen).", default=0)
     
 
@@ -191,7 +195,6 @@ class LIST_OT_NewItem(Operator):
         list = context.scene.my_list.add()
 
         return{'FINISHED'}
-
 
 
 class LIST_OT_DeleteItem(Operator):
@@ -285,6 +288,12 @@ class RENDER_PT_panel_p(bpy.types.Panel):
         self.layout.label(text="Settings to export rendered images:")
  
         row = self.layout.row()
+        row.prop(context.scene.render_prop, "frameStart")
+
+        row = self.layout.row()
+        row.prop(context.scene.render_prop, "frameEnd")
+
+        row = self.layout.row()
         row.prop(context.scene.render_prop, "frames")
         
         row = self.layout.row()
@@ -322,6 +331,8 @@ class RENDER_PT_panel_p(bpy.types.Panel):
             text=''
         )
          
+        row = self.layout.row()
+        row.prop(context.scene.render_prop, "make_json")
         
         # 'render.modal_timer_operator',
         # render operator call
@@ -506,7 +517,7 @@ class RenderOperator(bpy.types.Operator):
                     # loop through and render frames.  The UI sets how "often" it renders.
                     # Every frame is likely not needed.
                     json_frames = []
-                    for i in range(scn.frame_start,scn.frame_end, context.scene.render_prop.frames):
+                    for i in range(context.scene.render_prop.frameStart,context.scene.render_prop.frameEnd+1, context.scene.render_prop.frames):
                         scn.frame_current = i
 
                         json_frame = {}
@@ -561,11 +572,12 @@ class RenderOperator(bpy.types.Operator):
                     json_str = json.dumps(json_dict, indent=4)
                     
                     json_filename = os.path.join(animation_folder, "metadata.json")
-                    print("json_filename: " + json_filename)
-
+                    
                     # write JSON file
-                    with open(json_filename, 'w') as outfile:
-                        outfile.write(json_str + '\n')
+                    if context.scene.render_prop.make_json:
+                        print("json_filename: " + json_filename)
+                        with open(json_filename, 'w') as outfile:
+                            outfile.write(json_str + '\n')
         
         # after rotation for export reset the z rotation back to zero 
         bpy.context.active_object.rotation_euler[2] = 0
