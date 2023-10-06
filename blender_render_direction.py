@@ -543,38 +543,38 @@ class RenderOperator(bpy.types.Operator):
                                               write_still=True
                                              )
                         json_frames.append(json_frame)
-                                             
-                    json_dict = {
-                      "fps": blender_fps / context.scene.render_prop.frames,
-                      "origin": {
-                           "x": int(coord.x),
-                           "y": int(coord.y)
-                      },
-                      "camera": {
-                          "ortho_scale": round(ortho_scale, 2),
-                          "location": {
-                            "x": round(cam_location[0], 2),
-                            "y": round(cam_location[1], 2),
-                            "z": round(cam_location[2], 2),
-                          },
-                          "shift": {
-                            "x": round(cam_shift_x, 2),
-                            "y": round(cam_shift_y, 2),
-                          },
-                      },
-                      "animations": {
-                            item.name: {
-                                angleDir: json_frames
-                            },                         
+                        
+                    if context.scene.render_prop.make_json:    
+                        json_dict = {
+                        "fps": blender_fps / context.scene.render_prop.frames,
+                        "origin": {
+                            "x": int(coord.x),
+                            "y": int(coord.y)
                         },
-                    }
+                        "camera": {
+                            "ortho_scale": round(ortho_scale, 2),
+                            "location": {
+                                "x": round(cam_location[0], 2),
+                                "y": round(cam_location[1], 2),
+                                "z": round(cam_location[2], 2),
+                            },
+                            "shift": {
+                                "x": round(cam_shift_x, 2),
+                                "y": round(cam_shift_y, 2),
+                            },
+                        },
+                        "animations": {
+                                item.name: {
+                                    angleDir: json_frames
+                                },                         
+                            },
+                        }
 
-                    json_str = json.dumps(json_dict, indent=4)
-                    
-                    json_filename = os.path.join(animation_folder, "metadata.json")
-                    
-                    # write JSON file
-                    if context.scene.render_prop.make_json:
+                        json_str = json.dumps(json_dict, indent=4)
+                        
+                        json_filename = os.path.join(animation_folder, "metadata.json")
+                        
+                        # write JSON file
                         print("json_filename: " + json_filename)
                         with open(json_filename, 'w') as outfile:
                             outfile.write(json_str + '\n')
