@@ -27,7 +27,7 @@ import json
 import mathutils
 from bpy_extras.object_utils import world_to_camera_view
 
-
+from PIL import Image
 
 def get_camera_2d_origin():
     scene = bpy.context.scene
@@ -186,7 +186,7 @@ class RenderPropGroup(bpy.types.PropertyGroup):
         ('32','32','number of directions to render'),
         ])
     cardinal_names: bpy.props.BoolProperty(name="Generate cardinal direction names", description="If activated use E, NE, N, NW, W, SW, S, SE for <= 8 directions. Otherwise generate angle names.", default=True)
-    make_json: bpy.props.BoolProperty(name="Generate JSON", description="Create a JSON file for each direction", default=True)
+    # make_json: bpy.props.BoolProperty(name="Generate JSON", description="Create a JSON file for each direction", default=True)
     facing_angle: bpy.props.IntProperty(name="Facing Angle", description="Left oriented rotation angle compared to a character looking to the north view (top of the screen).", default=0)
     
 
@@ -336,8 +336,8 @@ class RENDER_PT_panel_p(bpy.types.Panel):
             text=''
         )
          
-        row = self.layout.row()
-        row.prop(context.scene.render_prop, "make_json")
+        # row = self.layout.row()
+        # row.prop(context.scene.render_prop, "make_json")
         
         # 'render.modal_timer_operator',
         # render operator call
@@ -525,16 +525,13 @@ class RenderOperator(bpy.types.Operator):
                     for i in range(context.scene.render_prop.frameStart,context.scene.render_prop.frameEnd+1, context.scene.render_prop.frames):
                         scn.frame_current = i
 
-                        json_frame = {}
                         render_filename = (str(item.name)
                                             + "_"
                                             + str(angle)
                                             + "_"
                                             + str(scn.frame_current).zfill(3)
                                             )
-                        json_frame['name'] = render_filename
-                        #json_frame['time'] = round(scn.frame_current / export_fps, 2)
-                                                
+
                         scn.render.filepath = (
                                             animation_folder
                                             + "/"
@@ -547,43 +544,7 @@ class RenderOperator(bpy.types.Operator):
                                               animation=False, 
                                               write_still=True
                                              )
-                        json_frames.append(json_frame)
 
-                    if context.scene.render_prop.make_json:    
-                        json_dict = {
-                        "fps": blender_fps / context.scene.render_prop.frames,
-                        "origin": {
-                            "x": int(coord.x),
-                            "y": int(coord.y)
-                        },
-                        "camera": {
-                            "ortho_scale": round(ortho_scale, 2),
-                            "location": {
-                                "x": round(cam_location[0], 2),
-                                "y": round(cam_location[1], 2),
-                                "z": round(cam_location[2], 2),
-                            },
-                            "shift": {
-                                "x": round(cam_shift_x, 2),
-                                "y": round(cam_shift_y, 2),
-                            },
-                        },
-                        "animations": {
-                                item.name: {
-                                    angleDir: json_frames
-                                },                         
-                            },
-                        }
-
-                        json_str = json.dumps(json_dict, indent=4)
-                        
-                        json_filename = os.path.join(animation_folder, "metadata.json")
-                        
-                        # write JSON file
-                        print("json_filename: " + json_filename)
-                        with open(json_filename, 'w') as outfile:
-                            outfile.write(json_str + '\n')
-        
         # after rotation for export reset the z rotation back to zero 
         bpy.context.active_object.rotation_euler[2] = 0
                                                     
