@@ -1,3 +1,8 @@
+# TODO: use PIL to combine output images:
+# https://stackoverflow.com/q/30227466/
+# https://blender.stackexchange.com/a/238995
+# The magic happens on line 525
+
 import bpy
 import os
 import math
@@ -543,7 +548,7 @@ class RenderOperator(bpy.types.Operator):
                                               write_still=True
                                              )
                         json_frames.append(json_frame)
-                        
+
                     if context.scene.render_prop.make_json:    
                         json_dict = {
                         "fps": blender_fps / context.scene.render_prop.frames,
