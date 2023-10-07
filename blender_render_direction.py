@@ -481,6 +481,7 @@ class RenderOperator(bpy.types.Operator):
             bpy.context.scene.objects[o.name].select_set(True)
 
             scn = bpy.context.scene
+            fileEXT=str(scn.render.image_settings.file_format).lower()
 
             # loop through the actions
             for item in context.scene.render_prop.my_list:
@@ -525,12 +526,12 @@ class RenderOperator(bpy.types.Operator):
                     for i in range(context.scene.render_prop.frameStart,context.scene.render_prop.frameEnd+1, context.scene.render_prop.frames):
                         scn.frame_current = i
 
-                        render_filename = (str(item.name)
-                                            + "_"
-                                            + str(angle)
-                                            + "_"
-                                            + str(scn.frame_current).zfill(3)
-                                            )
+                        render_filename = ("temp")#str(item.name)
+                                            # + "_"
+                                            # + str(angle)
+                                            # + "_"
+                                            # + str(scn.frame_current).zfill(3)
+                                            # )
 
                         scn.render.filepath = (
                                             animation_folder
@@ -544,6 +545,28 @@ class RenderOperator(bpy.types.Operator):
                                               animation=False, 
                                               write_still=True
                                              )
+
+                        #######################
+                        #### concat images ####
+                        #######################
+                        # https://stackoverflow.com/a/30228308
+
+                        tempIMGpath=f"{animation_folder}/temp.{fileEXT}"
+                        outputIMGpath=f"{animation_folder}/output.{fileEXT}"
+
+                        tempIMG=Image.open(tempIMGpath)
+                        if not os.path.isfile(outputIMGpath):
+                            tempIMG.save(outputIMGpath)
+                            continue
+
+                        outputIMG=Image.open(outputIMGpath)
+                        newIMG=Image.new('RGBA',(tempIMG.size[0]+outputIMG.size[0],tempIMG.size[1]+outputIMG.size[1]))
+                        newIMG.paste(outputIMG,(0,0))
+                        newIMG.paste(tempIMG,(outputIMG.size[0],0))
+                        newIMG.save(outputIMGpath)
+
+
+
 
         # after rotation for export reset the z rotation back to zero 
         bpy.context.active_object.rotation_euler[2] = 0
