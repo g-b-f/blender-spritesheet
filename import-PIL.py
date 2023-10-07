@@ -16,5 +16,5 @@ if plat in ['Linux' 'Darwin']:
 elif plat == 'Windows':
     with open (bpy.path.abspath("//install_PIL.ps1"),'wt') as f:
         f.write("# Please run this file in administrator mode\n")
-        f.write(f"'cd {sys.exec_prefix}\\bin'")
-        f.write(f".python.exe -m pip install --target={str(lib)} PIL\n")
+        f.write(f"'cd {sys.exec_prefix}\\bin'\n")
+        f.write("./python -m pip install PIL")
