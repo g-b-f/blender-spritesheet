@@ -560,7 +560,7 @@ class RenderOperator(bpy.types.Operator):
                             continue
 
                         outputIMG=Image.open(outputIMGpath)
-                        newIMG=Image.new('RGBA',(tempIMG.size[0]+outputIMG.size[0],tempIMG.size[1]+outputIMG.size[1]))
+                        newIMG=Image.new('RGBA',(tempIMG.size[0]+outputIMG.size[0],outputIMG.size[1]))
                         newIMG.paste(outputIMG,(0,0))
                         newIMG.paste(tempIMG,(outputIMG.size[0],0))
                         newIMG.save(outputIMGpath)
